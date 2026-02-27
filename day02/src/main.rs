@@ -2,15 +2,34 @@ use anyhow::Result;
 use std::error::Error;
 use std::fs;
 
+fn compare<'a>(
+    first_pattern: &'a str,
+    rest_pattern: &'a str,
+    pattern_length: usize,
+) -> (bool, &'a str) {
+    let mut pattern_repeated: bool = true;
+    let mut second_pattern: &'a str = rest_pattern;
+    if rest_pattern.len() != pattern_length {
+        let (first_pattern, rest_pattern) = rest_pattern.split_at(pattern_length);
+        (pattern_repeated, second_pattern) = compare(first_pattern, rest_pattern, pattern_length);
+    }
+    if pattern_repeated == true && first_pattern == second_pattern {
+        return (true, first_pattern);
+    }
+    (false, first_pattern)
+}
+
 fn is_invalid(number: u64) -> bool {
     let number = number.to_string();
     let length = number.len();
-    // string has to have an even length so that the pattern can repeat
-    if length % 2 == 0 {
-        let (first_part, second_part) = number.split_at(length / 2);
-        if first_part == second_part {
-            println!("Invalid number: {}", number);
-            return true;
+    let max_pattern_length = length / 2;
+    for pattern_length in 1..=max_pattern_length {
+        if length % pattern_length == 0 && length / pattern_length != 0 {
+            let (first_part, second_part) = number.split_at(pattern_length);
+            let (pattern_repeated, _) = compare(first_part, second_part, pattern_length);
+            if pattern_repeated == true {
+                return true;
+            };
         }
     }
     false
@@ -21,10 +40,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut sum: u64 = 0;
     for line in input.lines() {
         let line = line.trim();
-        if line == "" {
-            println!("Line is empty.");
-            break;
-        }
         for range in line.split(',') {
             let range: Vec<&str> = range.split('-').collect();
             let range_begin = range[0].parse::<u64>()?;
