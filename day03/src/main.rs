@@ -1,44 +1,53 @@
-use anyhow::Result;
-use std::error::Error;
+use anyhow::{Context, Result};
 use std::fs;
 
-const NUMBER_OF_DIGITS: usize = 12; // This is how many digits should be used to create the final number
+const NUMBER_OF_DIGITS: usize = 12;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = fs::read_to_string("day03/input")?;
-    let input = input.trim();
-    let mut sum: u64 = 0;
-    for line in input.lines() {
-        let line: Result<Vec<u64>, anyhow::Error> = line
-            .chars()
-            .rev()
-            .map(|char| match char.to_digit(10) {
-                Some(digit) => Ok(digit as u64),
-                None => Err(anyhow::anyhow!("Cannot convert char into digit.")),
-            })
-            .collect();
-        let line = line?;
-        let mut positions = vec![0; NUMBER_OF_DIGITS];
-        let mut previous_highest_digit_position: usize = line.len();
-        for digit in (0 as usize..NUMBER_OF_DIGITS).rev() {
-            let mut highest_number: u64 = 0;
-            let mut highest_digit_position = digit;
-            for pos in digit..previous_highest_digit_position {
-                if line[pos] >= highest_number {
-                    highest_number = line[pos];
-                    highest_digit_position = pos;
+fn solve_simplified_stack(line_str: &str) -> u64 {
+    let line_chars: Vec<u64> = line_str
+        .chars()
+        .filter_map(|c| c.to_digit(10).map(|d| d as u64))
+        .collect();
+    let k = NUMBER_OF_DIGITS;
+    let n = line_chars.len();
+    if n < k {
+        return 0;
+    }
+
+    let mut stack = Vec::with_capacity(k);
+    let mut to_drop = n - k;
+
+    for &digit in &line_chars {
+        while to_drop > 0 {
+            if let Some(&last) = stack.last() {
+                if last < digit {
+                    stack.pop();
+                    to_drop -= 1;
+                    continue;
                 }
             }
-            positions[digit] = highest_digit_position;
-            previous_highest_digit_position = highest_digit_position;
+            break;
         }
-        let mut number: u64 = 0;
-        positions.reverse();
-        for pos in positions.into_iter() {
-            number = line[pos] + number * 10;
-        }
-        sum = sum + number;
+        stack.push(digit);
     }
+    stack.truncate(k);
+
+    let mut number: u64 = 0;
+    for &digit in stack.iter() {
+        number = number * 10 + digit;
+    }
+    number
+}
+
+fn main() -> Result<()> {
+    let input = fs::read_to_string("day03/input").context("Failed to read input")?;
+    let input = input.trim();
+    let mut sum: u64 = 0;
+
+    for line in input.lines() {
+        sum += solve_simplified_stack(line);
+    }
+
     println!("Sum: {}", sum);
     Ok(())
 }
