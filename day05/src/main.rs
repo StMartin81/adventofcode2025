@@ -1,5 +1,4 @@
-use anyhow::{Context, Result, anyhow};
-use std::collections::VecDeque;
+use anyhow::{anyhow, Context, Result};
 use std::fs::read_to_string;
 
 #[derive(Clone)]
@@ -8,71 +7,109 @@ struct Range {
     end: u64,
 }
 
-fn main() -> Result<()> {
-    let contents = read_to_string("day05/input").context("Cannot read file")?;
-    let contents = contents.trim();
-    let mut ranges = VecDeque::<Range>::new();
-    let mut items = VecDeque::<u64>::new();
+fn parse_input(contents: &str) -> Result<(Vec<Range>, Vec<u64>)> {
+    let mut parsed_ranges = Vec::<Range>::new();
+    let mut parsed_items = Vec::<u64>::new();
     let mut reading_ranges = true;
-    for line in contents.lines() {
+
+    for (line_index, line) in contents.lines().enumerate() {
+        let line_number = line_index + 1;
         if line.is_empty() {
             reading_ranges = false;
             continue;
         }
 
         if reading_ranges {
-            let range = line.split('-');
-            let range: Vec<&str> = range.collect();
-            ranges.push_back(Range {
-                begin: range[0].parse()?,
-                end: range[1].parse()?,
-            });
-        } else {
-            items.push_back(line.parse()?);
-        }
-    }
-    let mut ranges: Vec<&Range> = ranges.iter().collect();
-    ranges.sort_by(|a: &&Range, b: &&Range| a.begin.cmp(&b.begin));
-    let mut consolidated_ranges = VecDeque::new();
-    consolidated_ranges.push_back(ranges[0].clone());
-    for range in ranges {
-        let mut consolidated_range = consolidated_ranges
-            .pop_back()
-            .ok_or(anyhow!("No ranges available"))?;
-        if range.begin <= consolidated_range.end + 1 {
-            // We're extending a range
-            if range.end > consolidated_range.end {
-                consolidated_range.end = range.end
+            let (begin_part, end_part) = line.split_once('-').ok_or_else(|| {
+                anyhow!(
+                    "Invalid range format at line {}: '{}'",
+                    line_number,
+                    line
+                )
+            })?;
+
+            let begin: u64 = begin_part.parse().with_context(|| {
+                format!("Failed to parse range begin at line {}: '{}'", line_number, line)
+            })?;
+            let end: u64 = end_part.parse().with_context(|| {
+                format!("Failed to parse range end at line {}: '{}'", line_number, line)
+            })?;
+
+            if begin > end {
+                return Err(anyhow!(
+                    "Invalid range at line {}: begin ({}) must be <= end ({}) in '{}'",
+                    line_number,
+                    begin,
+                    end,
+                    line
+                ));
             }
-            consolidated_ranges.push_back(consolidated_range);
+
+            parsed_ranges.push(Range { begin, end });
         } else {
-            consolidated_ranges.push_back(consolidated_range);
-            consolidated_ranges.push_back(range.clone());
+            parsed_items.push(line.parse().with_context(|| {
+                format!("Failed to parse item at line {}: '{}'", line_number, line)
+            })?);
         }
     }
-    let mut fresh_items: u64 = 0;
-    let mut items_sorted: Vec<u64> = items.into_iter().collect();
-    items_sorted.sort();
-    let mut items_queue = VecDeque::new();
-    for item in items_sorted {
-        items_queue.push_back(item);
+
+    Ok((parsed_ranges, parsed_items))
+}
+
+fn consolidate_ranges(mut parsed_ranges: Vec<Range>) -> Result<Vec<Range>> {
+    parsed_ranges.sort_unstable_by(|a, b| a.begin.cmp(&b.begin));
+
+    let mut merged_ranges = Vec::<Range>::new();
+    let mut parsed_iter = parsed_ranges.into_iter();
+    let first_range = parsed_iter.next().ok_or(anyhow!("No ranges available"))?;
+    merged_ranges.push(first_range);
+
+    for range in parsed_iter {
+        let last_merged = merged_ranges
+            .last_mut()
+            .ok_or(anyhow!("No ranges available"))?;
+
+        if range.begin <= last_merged.end.saturating_add(1) {
+            if range.end > last_merged.end {
+                last_merged.end = range.end;
+            }
+        } else {
+            merged_ranges.push(range);
+        }
     }
-    let consolidated_ranges = consolidated_ranges.into_iter();
-    for range in consolidated_ranges {
-        loop {
-            if let Some(item) = items_queue.pop_front() {
-                if item >= range.begin && item <= range.end {
-                    fresh_items = fresh_items + 1;
-                } else if item > range.end {
-                    items_queue.push_front(item);
-                    break;
-                }
+
+    Ok(merged_ranges)
+}
+
+fn count_fresh_items(mut sorted_items: Vec<u64>, merged_ranges: &[Range]) -> u64 {
+    sorted_items.sort_unstable();
+
+    let mut fresh_items = 0;
+    let mut item_index = 0usize;
+    for range in merged_ranges {
+        while item_index < sorted_items.len() {
+            let item = sorted_items[item_index];
+            if item < range.begin {
+                item_index += 1;
+            } else if item <= range.end {
+                fresh_items += 1;
+                item_index += 1;
             } else {
-                // no more items
                 break;
             }
         }
     }
+
+    fresh_items
+}
+
+fn main() -> Result<()> {
+    let contents = read_to_string("day05/input").context("Cannot read file")?;
+    let contents = contents.trim();
+    let (parsed_ranges, parsed_items) = parse_input(contents)?;
+    let merged_ranges = consolidate_ranges(parsed_ranges)?;
+    let fresh_items = count_fresh_items(parsed_items, &merged_ranges);
+
     println!("Number of fresh items: {}", fresh_items);
     Ok(())
 }
