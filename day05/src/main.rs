@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::fs::read_to_string;
 
 #[derive(Clone)]
@@ -21,18 +21,20 @@ fn parse_input(contents: &str) -> Result<(Vec<Range>, Vec<u64>)> {
 
         if reading_ranges {
             let (begin_part, end_part) = line.split_once('-').ok_or_else(|| {
-                anyhow!(
-                    "Invalid range format at line {}: '{}'",
-                    line_number,
-                    line
-                )
+                anyhow!("Invalid range format at line {}: '{}'", line_number, line)
             })?;
 
             let begin: u64 = begin_part.parse().with_context(|| {
-                format!("Failed to parse range begin at line {}: '{}'", line_number, line)
+                format!(
+                    "Failed to parse range begin at line {}: '{}'",
+                    line_number, line
+                )
             })?;
             let end: u64 = end_part.parse().with_context(|| {
-                format!("Failed to parse range end at line {}: '{}'", line_number, line)
+                format!(
+                    "Failed to parse range end at line {}: '{}'",
+                    line_number, line
+                )
             })?;
 
             if begin > end {
@@ -81,26 +83,14 @@ fn consolidate_ranges(mut parsed_ranges: Vec<Range>) -> Result<Vec<Range>> {
     Ok(merged_ranges)
 }
 
-fn count_fresh_items(mut sorted_items: Vec<u64>, merged_ranges: &[Range]) -> u64 {
-    sorted_items.sort_unstable();
+fn count_valid_items(merged_ranges: &[Range]) -> u64 {
+    let mut valid_items_count: u64 = 0;
 
-    let mut fresh_items = 0;
-    let mut item_index = 0usize;
     for range in merged_ranges {
-        while item_index < sorted_items.len() {
-            let item = sorted_items[item_index];
-            if item < range.begin {
-                item_index += 1;
-            } else if item <= range.end {
-                fresh_items += 1;
-                item_index += 1;
-            } else {
-                break;
-            }
-        }
+        valid_items_count += range.end - range.begin + 1;
     }
 
-    fresh_items
+    valid_items_count
 }
 
 fn main() -> Result<()> {
@@ -108,8 +98,8 @@ fn main() -> Result<()> {
     let contents = contents.trim();
     let (parsed_ranges, parsed_items) = parse_input(contents)?;
     let merged_ranges = consolidate_ranges(parsed_ranges)?;
-    let fresh_items = count_fresh_items(parsed_items, &merged_ranges);
+    let valid_items = count_valid_items(&merged_ranges);
 
-    println!("Number of fresh items: {}", fresh_items);
+    println!("Number of valid items: {}", valid_items);
     Ok(())
 }
